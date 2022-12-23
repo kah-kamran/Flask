@@ -1,8 +1,11 @@
-from flask import Flask, render_template, request, session
+from flask import Flask, render_template, request, session, redirect
 from flask_sqlalchemy import SQLAlchemy
 from datetime import date
-from flask_mail import Mail, Message
+from flask_mail import Mail
+import os
+from werkzeug.utils import secure_filename
 import json
+import math
 
 with open('config.json', 'r') as c:
     params = json.load(c)["params"]
@@ -10,7 +13,6 @@ with open('config.json', 'r') as c:
 local_server = True
 app = Flask(__name__)
 app.secret_key = 'super-secret-key'
-
 app.config.update(
     MAIL_SERVER = 'smtp.gmail.com',
     MAIL_PORT = '465',
@@ -52,29 +54,79 @@ with app.app_context():
 
 @app.route("/")
 def home():
-    # posts = Posts.query.all()
-    posts = Posts.query.order_by(Posts.sno).all()[0:3]
-    return render_template('index.html', params=params, posts=posts)
+    posts = Posts.query.order_by(Posts.sno).all()
+    last = math.ceil(len(posts)/int(params['no_of_posts']))
+    page = request.args.get('page')
+    if (not str(page).isnumeric()):
+        page = 1
+    page = int(page)
+    posts = posts[(page-1)*int(params['no_of_posts']):(page-1)*int(params['no_of_posts'])+ int(params['no_of_posts'])]
+    if page==1:
+        prev = "#"
+        next = "/?page="+ str(page+1)
+    elif page==last:
+        prev = "/?page="+ str(page-1)
+        next = "#"
+    else:
+        prev = "/?page="+ str(page-1)
+        next = "/?page="+ str(page+1)
+    
+    return render_template('index.html', params=params, posts=posts, prev=prev, next=next)
 
 @app.route("/dashboard" , methods=['GET', 'POST'])
 def dashboard():
     if ('user' in session and session['user'] == params['admin_user']):
-        return render_template('dashboard.html', params=params)
+        posts = Posts.query.order_by(Posts.sno).all()
+        return render_template('dashboard.html', params=params, posts=posts)
 
     if request.method=='POST':
         email = request.form.get('email')
         password = request.form.get('password')
         if (email == params['admin_user'] and password == params['admin_password']):
             session['user']= email
-            return render_template('dashboard.html', params=params)
-    else:
-        return render_template('login.html', params=params)
+            posts = Posts.query.order_by(Posts.sno).all()
+
+            return render_template('dashboard.html', params=params, posts=posts)
+    return render_template('login.html', params=params)
 
 
 @app.route("/post/<string:post_slug>", methods=["GET"])
 def post_routes(post_slug):
     post = Posts.query.filter_by(slug=post_slug).first()
     return render_template('post.html', params=params, post=post)
+
+@app.route("/edit/<string:sno>" , methods=['GET', 'POST'])
+def edit(sno):
+    if "user" in session and session['user']==params['admin_user']:
+        if request.method=="POST":
+            box_title = request.form.get('title')
+            print("🚀 ~ file: main.py:88 ~ box_title", box_title)
+            slug = request.form.get('slug')
+            content = request.form.get('content')
+        
+            if sno=='0':
+                post = Posts(title=box_title, slug=slug, content=content, date=date.today())
+                db.session.add(post)
+                db.session.commit()
+            else:
+                post = Posts.query.filter_by(sno=sno).first()
+                post.title = box_title
+                post.slug = slug
+                post.content = content
+                post.date = date.today()
+                db.session.commit()
+            return redirect('/edit/'+sno)
+    post = Posts.query.filter_by(sno=sno).first()
+    return render_template('edit.html', params=params, post=post)
+
+@app.route("/delete/<string:sno>" , methods=['GET', 'POST'])
+def delete(sno):
+    if "user" in session and session['user']==params['admin_user']:
+        post = Posts.query.filter_by(sno=sno).first()
+        db.session.delete(post)
+        db.session.commit()
+    return redirect("/dashboard")
+
 
 @app.route("/about")
 def about():
@@ -103,5 +155,18 @@ def contact():
                             )
     return render_template('contact.html', params=params)
 
+@app.route("/uploader" , methods=['GET', 'POST'])
+def uploader():
+    if "user" in session and session['user']==params['admin_user']:
+        if request.method=='POST':
+            f = request.files['file1']
+            f.save(os.path.join(app.root_path, 'media', secure_filename(f.filename)))
+            return "Uploaded successfully!"
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user')
+    return redirect('/dashboard')
 
 app.run(debug=True)

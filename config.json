@@ -11,7 +11,8 @@
         "gmail-password":"anqbfiezeeorable",
         "login_logo": "login.svg",
         "admin_user":"admin@gmail.com",
-        "admin_password" : "admin"
+        "admin_password" : "admin",
+        "no_of_posts":2
 
     }
 }

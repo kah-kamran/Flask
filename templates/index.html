@@ -36,7 +36,11 @@
                     <hr class="my-4" />
                     {% endfor %}
                     <!-- Pager-->
-                    <div class="d-flex justify-content-end mb-4"><a class="btn btn-primary text-uppercase" href="#!">Older Posts →</a></div>
+                    <div class="clearfix">
+                   <a class="btn btn-primary float-left" href="{{prev}}"> &larr; Previous</a>
+                   <a class="btn btn-primary float-right" style="float: right;" href="{{next}}">Next &rarr; </a>
+                   <br>
+                    </div>
                 </div>
             </div>
         </div>
